@@ -40,7 +40,7 @@ export default async function AdminNotificationTemplatesPage() {
     customerName: "Budi Santoso",
     orderNumber: "LDR-20261012-7KQ2M",
     orderStatus: "Sedang Diproses",
-    serviceName: "Cuci Kering Reguler",
+    serviceName: "Cuci Setrika",
     weight: "4,5 kg",
     totalPrice: "Rp 31.500,00",
     orderUrl: baseUrl

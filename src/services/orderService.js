@@ -165,6 +165,24 @@ export function isActiveStatus(status) {
   );
 }
 
+/**
+ * Apakah pesanan masih menunggu penimbangan.
+ *
+ * Bernilai benar selama masih ada layanan berbasis KG yang berat aktualnya
+ * belum diisi admin. Selama kondisi ini berlaku, total biaya pesanan belum
+ * final sehingga pelanggan belum boleh membayar.
+ *
+ * Catatan: `order.items` harus sudah dimuat (include) oleh pemanggil.
+ */
+export function isAwaitingWeighing(order) {
+  const items = order?.items ?? [];
+  return items.some(
+    (item) =>
+      item.priceUnitSnapshot === PRICE_UNITS.KG &&
+      (item.weight ?? null) === null,
+  );
+}
+
 // ------------------------------------------------------------------
 // Query pembantu
 // ------------------------------------------------------------------

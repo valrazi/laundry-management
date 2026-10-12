@@ -13,21 +13,52 @@ import {
   User,
 } from "@/components/ui/icons";
 
+/**
+ * Menu navigasi pelanggan.
+ * `mobileLabel` dipakai pada bilah bawah agar tetap muat dalam 5 kolom.
+ */
 const NAV_ITEMS = [
-  { href: "/customer/dashboard", label: "Beranda", Icon: Home },
-  { href: "/customer/orders", label: "Pesanan", Icon: Package },
-  { href: "/customer/orders/new", label: "Pesan Baru", Icon: Plus, primary: true },
-  { href: "/customer/profile", label: "Profil", Icon: User },
+  {
+    href: "/customer/dashboard",
+    label: "Beranda",
+    mobileLabel: "Beranda",
+    Icon: Home,
+  },
+  {
+    href: "/customer/orders",
+    label: "Pesanan",
+    mobileLabel: "Pesanan",
+    Icon: Package,
+  },
+  {
+    href: "/customer/orders/new",
+    label: "Pesan Baru",
+    mobileLabel: "Pesan",
+    Icon: Plus,
+    primary: true,
+  },
+  {
+    href: "/customer/profile",
+    label: "Profil",
+    mobileLabel: "Profil",
+    Icon: User,
+  },
 ];
+
+/** Kelas dasar setiap sel navigasi bawah agar tinggi & padding seragam. */
+const BOTTOM_ITEM_CLASS =
+  "flex w-full min-h-[3.75rem] flex-col items-center justify-center gap-1 px-0.5 py-2 text-[0.68rem] font-medium leading-none transition";
 
 /**
  * Kerangka halaman pelanggan.
  *
  * Dirancang mobile-first karena mayoritas pelanggan membuka aplikasi dari
  * ponsel:
- * - Navigasi bawah (bottom navigation) dengan sasaran sentuh besar.
- * - Menu lengkap tetap tersedia di header pada layar tablet/desktop.
- * - Konten diberi jarak bawah agar tidak tertutup navigasi bawah.
+ * - Navigasi bawah berisi 5 item sehingga tombol "Pesan" berada tepat di
+ *   tengah dan tombol "Keluar" berada di ujung kanan.
+ * - Tombol keluar pada header hanya ditampilkan pada layar >= md agar tidak
+ *   ada aksi yang tampil dua kali.
+ * - Konten diberi jarak bawah supaya tidak tertutup navigasi bawah.
  */
 export default function CustomerShell({ user, children }) {
   const pathname = usePathname();
@@ -44,7 +75,8 @@ export default function CustomerShell({ user, children }) {
     return pathname === href || pathname.startsWith(`${href}/`);
   };
 
-  const firstName = String(user.name || "").trim().split(/\s+/)[0] || "Pelanggan";
+  const firstName =
+    String(user.name || "").trim().split(/\s+/)[0] || "Pelanggan";
 
   return (
     <div className="flex min-h-screen flex-col bg-white">
@@ -86,14 +118,15 @@ export default function CustomerShell({ user, children }) {
             ))}
           </nav>
 
-          <form action={logoutAction}>
+          {/* Pada ponsel, tombol keluar ada di navigasi bawah. */}
+          <form action={logoutAction} className="hidden md:block">
             <button
               type="submit"
               aria-label="Keluar dari akun"
-              className="flex h-10 items-center gap-2 rounded-lg border border-slate-300 px-3 text-sm font-medium text-slate-600 transition hover:bg-slate-100 md:h-9"
+              className="flex h-9 items-center gap-2 rounded-lg border border-slate-300 px-3 text-sm font-medium text-slate-600 transition hover:bg-slate-100"
             >
               <LogOut className="h-4 w-4" />
-              <span className="hidden md:inline">Keluar</span>
+              Keluar
             </button>
           </form>
         </div>
@@ -103,20 +136,20 @@ export default function CustomerShell({ user, children }) {
         {children}
       </main>
 
-      {/* Navigasi bawah khusus ponsel */}
+      {/* Navigasi bawah khusus ponsel — 5 item, "Pesan" tepat di tengah */}
       <nav
         aria-label="Navigasi utama"
         className="fixed inset-x-0 bottom-0 z-30 border-t border-slate-200 bg-white pb-[env(safe-area-inset-bottom)] md:hidden"
       >
-        <ul className="grid grid-cols-4">
-          {NAV_ITEMS.map(({ href, label, Icon, primary }) => {
+        <ul className="grid grid-cols-5">
+          {NAV_ITEMS.map(({ href, label, mobileLabel, Icon, primary }) => {
             const active = isActive(href);
             return (
               <li key={href}>
                 <Link
                   href={href}
                   aria-current={active ? "page" : undefined}
-                  className={`flex min-h-[3.75rem] flex-col items-center justify-center gap-1 px-1 py-2 text-[0.7rem] font-medium transition ${
+                  className={`${BOTTOM_ITEM_CLASS} ${
                     active ? "text-brand-navy" : "text-slate-500"
                   }`}
                 >
@@ -133,11 +166,26 @@ export default function CustomerShell({ user, children }) {
                       className={`h-5 w-5 ${active ? "text-brand-blue" : ""}`}
                     />
                   )}
-                  {label}
+                  <span className="whitespace-nowrap">
+                    {mobileLabel || label}
+                  </span>
                 </Link>
               </li>
             );
           })}
+
+          <li>
+            <form action={logoutAction}>
+              <button
+                type="submit"
+                aria-label="Keluar dari akun"
+                className={`${BOTTOM_ITEM_CLASS} text-slate-500 hover:text-rose-600`}
+              >
+                <LogOut className="h-5 w-5" />
+                <span className="whitespace-nowrap">Keluar</span>
+              </button>
+            </form>
+          </li>
         </ul>
       </nav>
     </div>

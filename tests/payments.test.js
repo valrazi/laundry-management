@@ -5,7 +5,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { ORDER_STATUS, PAYMENT_STATUS, PRICE_UNITS, ROLES } from "@/lib/constants";
 import prisma from "@/lib/prisma";
 import { resolveReceiptAbsolutePath } from "@/lib/uploads";
-import { createOrder } from "@/services/orderService";
+import { createOrder, getAdminOrderDetail, updateOrderDetails } from "@/services/orderService";
 import {
   getPaymentDetail,
   rejectPayment,
@@ -28,6 +28,7 @@ let customer;
 let otherCustomer;
 let admin;
 let itemService;
+let kgService;
 
 const uploadedFiles = new Set();
 
@@ -56,6 +57,12 @@ beforeAll(async () => {
     name: "Cuci Sepatu Bayar",
     price: "25000.00",
     priceUnit: PRICE_UNITS.ITEM,
+  });
+
+  kgService = await createService({
+    name: "Kiloan Uji",
+    price: "5000.00",
+    priceUnit: PRICE_UNITS.KG,
   });
 
   await enableWhatsApp();
@@ -180,6 +187,76 @@ describe("submitPaymentReceipt", () => {
 
     expect(result.ok).toBe(false);
     expect(result.message).toMatch(/tidak ditemukan/i);
+  });
+});
+
+describe("validasi menunggu penimbangan", () => {
+  it("menolak unggah bukti transfer selama pesanan belum ditimbang", async () => {
+    const created = await createOrder({
+      customerId: customer.id,
+      items: [{ serviceId: kgService.id, quantity: null }],
+    });
+    expect(created.ok).toBe(true);
+
+    const result = await submitPaymentReceipt({
+      orderId: created.order.id,
+      customerId: customer.id,
+      file: uploadFile(buildPngBuffer()),
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.message).toMatch(/menunggu penimbangan/i);
+
+    // Tidak ada berkas tersimpan dan status pembayaran tidak berubah.
+    const payment = await prisma.payment.findUnique({
+      where: { orderId: created.order.id },
+    });
+    expect(payment.status).toBe(PAYMENT_STATUS.UNPAID);
+    expect(payment.proofFilePath).toBeNull();
+    expect(payment.amount.toString()).toBe("0");
+  });
+
+  it("mengizinkan unggah setelah ditimbang, dengan nominal final", async () => {
+    const created = await createOrder({
+      customerId: customer.id,
+      items: [{ serviceId: kgService.id, quantity: null }],
+    });
+
+    const before = await getAdminOrderDetail(created.order.id);
+    expect(before.weight).toBeNull();
+
+    // Admin menimbang dan mencatat berat aktual.
+    const updated = await updateOrderDetails({
+      orderId: created.order.id,
+      additionalCost: "0",
+      adminNotes: null,
+      items: [{ id: before.items[0].id, weight: "4.00", quantity: null }],
+    });
+    expect(updated.ok).toBe(true);
+
+    const result = await submitPaymentReceipt({
+      orderId: created.order.id,
+      customerId: customer.id,
+      file: uploadFile(buildPngBuffer()),
+    });
+
+    expect(result.ok).toBe(true);
+    uploadedFiles.add(result.payment.proofFilePath);
+    expect(result.payment.status).toBe(PAYMENT_STATUS.WAITING_VERIFICATION);
+    // 4 kg x Rp 5.000 = Rp 20.000
+    expect(result.payment.amount.toString()).toBe("20000");
+  });
+
+  it("tetap mengizinkan unggah untuk pesanan tanpa layanan KG", async () => {
+    const order = await newOrder();
+    const result = await submitPaymentReceipt({
+      orderId: order.id,
+      customerId: customer.id,
+      file: uploadFile(buildPngBuffer()),
+    });
+
+    expect(result.ok).toBe(true);
+    uploadedFiles.add(result.payment.proofFilePath);
   });
 });
 

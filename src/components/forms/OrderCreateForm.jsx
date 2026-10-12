@@ -9,6 +9,7 @@ import Button from "@/components/ui/Button";
 import { Card, CardBody, CardHeader } from "@/components/ui/Card";
 import { Field, Input, Textarea } from "@/components/ui/Form";
 import { Checkbox } from "@/components/ui/Form";
+import ServiceIcon from "@/components/ui/ServiceIcon";
 import { Plus } from "@/components/ui/icons";
 import { PRICE_UNIT_SHORT, PRICE_UNITS } from "@/lib/constants";
 
@@ -129,6 +130,11 @@ export default function OrderCreateForm({ services }) {
                         setChecked(service.id, event.target.checked)
                       }
                       className="mt-1"
+                    />
+                    <ServiceIcon
+                      name={service.name}
+                      priceUnit={service.priceUnit}
+                      className="mt-0.5"
                     />
                     <span className="min-w-0">
                       <span className="block text-base font-medium text-slate-800 sm:text-sm">

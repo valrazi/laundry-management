@@ -209,10 +209,16 @@ async function seedUsers() {
   ];
 
   const customers = [];
+
+  // Semua pelanggan contoh memakai password yang sama (didokumentasikan pada
+  // README) agar mudah didemokan. Hash dibuat sekali saja.
+  const customerPasswordHash = await hashPassword(customerPassword);
+
   for (const seed of customerSeeds) {
-    const existing = await prisma.user.findUnique({ where: { email: seed.email } });
     const customer = await prisma.user.upsert({
       where: { email: seed.email },
+      // Password tidak diubah saat seed diulang agar perubahan password oleh
+      // pelanggan tidak tertimpa.
       update: { name: seed.name, phone: seed.phone, isActive: true },
       create: {
         name: seed.name,
@@ -220,11 +226,7 @@ async function seedUsers() {
         phone: seed.phone,
         role: ROLES.CUSTOMER,
         isActive: true,
-        // Semua pelanggan contoh memakai password yang sama (didokumentasikan
-        // pada README) agar mudah didemokan.
-        passwordHash: existing
-          ? undefined
-          : await hashPassword(customerPassword),
+        passwordHash: customerPasswordHash,
       },
     });
     customers.push(customer);
@@ -233,48 +235,69 @@ async function seedUsers() {
   return { admin, customers };
 }
 
-async function seedServices() {
-  const serviceSeeds = [
-    {
-      name: "Cuci Kering Reguler",
-      description: "Cuci dan kering tanpa setrika, selesai dalam 2 hari.",
-      price: "7000.00",
-      priceUnit: PRICE_UNITS.KG,
-    },
-    {
-      name: "Cuci Kering Setrika Express",
-      description: "Cuci, kering, dan setrika, selesai dalam 1 hari.",
-      price: "12000.00",
-      priceUnit: PRICE_UNITS.KG,
-    },
-    {
-      name: "Setrika Saja",
-      description: "Layanan setrika untuk pakaian yang sudah bersih.",
-      price: "5000.00",
-      priceUnit: PRICE_UNITS.KG,
-    },
-    {
-      name: "Cuci Sepatu",
-      description: "Pembersihan sepatu per pasang.",
-      price: "25000.00",
-      priceUnit: PRICE_UNITS.ITEM,
-    },
-    {
-      name: "Cuci Bed Cover",
-      description: "Pembersihan bed cover ukuran hingga 180x200 cm.",
-      price: "35000.00",
-      priceUnit: PRICE_UNITS.ITEM,
-    },
-    {
-      name: "Cuci Jas / Gaun",
-      description: "Perawatan khusus untuk jas atau gaun.",
-      price: "45000.00",
-      priceUnit: PRICE_UNITS.ITEM,
-    },
-  ];
+/**
+ * Menu layanan resmi laundry.
+ *
+ * Inilah satu-satunya sumber daftar layanan: ubah array ini bila menu laundry
+ * berubah, lalu jalankan `npm run db:seed`. Harga di sini hanya dipakai saat
+ * layanan pertama kali dibuat — pesanan lama tetap memakai snapshot harganya.
+ */
+const SERVICE_SEEDS = [
+  {
+    name: "Cuci Setrika",
+    description: "Cuci dan setrika pakaian, dihitung per kilogram.",
+    price: "5000.00",
+    priceUnit: PRICE_UNITS.KG,
+  },
+  {
+    name: "Setrika",
+    description: "Setrika pakaian yang sudah bersih, dihitung per kilogram.",
+    price: "4000.00",
+    priceUnit: PRICE_UNITS.KG,
+  },
+  {
+    name: "Express",
+    description: "Layanan kilat, selesai di hari yang sama, dihitung per kilogram.",
+    price: "8000.00",
+    priceUnit: PRICE_UNITS.KG,
+  },
+  {
+    name: "Sprei",
+    description: "Cuci sprei, dihitung per pcs.",
+    price: "10000.00",
+    priceUnit: PRICE_UNITS.ITEM,
+  },
+  {
+    name: "Selimut",
+    description: "Cuci selimut, dihitung per pcs.",
+    price: "15000.00",
+    priceUnit: PRICE_UNITS.ITEM,
+  },
+  {
+    name: "Bed Cover",
+    description: "Cuci bed cover, dihitung per pcs.",
+    price: "25000.00",
+    priceUnit: PRICE_UNITS.ITEM,
+  },
+];
 
+/**
+ * Layanan contoh dari versi awal seed yang tidak lagi ada di menu laundry.
+ * Hanya DINONAKTIFKAN, tidak dihapus, supaya tautan ke pesanan lama tetap ada
+ * dan snapshot transaksi historis tetap utuh (PRD §11, AGENTS.md §14).
+ */
+const RETIRED_SERVICE_NAMES = [
+  "Cuci Kering Reguler",
+  "Cuci Kering Setrika Express",
+  "Setrika Saja",
+  "Cuci Sepatu",
+  "Cuci Bed Cover",
+  "Cuci Jas / Gaun",
+];
+
+async function seedServices() {
   const services = [];
-  for (const seed of serviceSeeds) {
+  for (const seed of SERVICE_SEEDS) {
     const existing = await prisma.service.findFirst({ where: { name: seed.name } });
     if (existing) {
       services.push(
@@ -287,6 +310,18 @@ async function seedServices() {
       services.push(await prisma.service.create({ data: { ...seed, isActive: true } }));
     }
   }
+
+  // Pensiunkan layanan lama yang sudah tidak ada di menu.
+  const retired = await prisma.service.updateMany({
+    where: { name: { in: RETIRED_SERVICE_NAMES }, isActive: true },
+    data: { isActive: false },
+  });
+  if (retired.count > 0) {
+    console.log(
+      `· ${retired.count} layanan lama dinonaktifkan (riwayat pesanan lama tetap utuh).`,
+    );
+  }
+
   return services;
 }
 
@@ -294,7 +329,8 @@ async function seedTemplates() {
   for (const event of NOTIFICATION_EVENTS) {
     await prisma.notificationTemplate.upsert({
       where: { eventKey: event.eventKey },
-      update: { name: event.name },
+      // Jangan menimpa perubahan yang sudah dilakukan admin (nama/pesan/status).
+      update: {},
       create: {
         eventKey: event.eventKey,
         name: event.name,
@@ -337,8 +373,8 @@ async function seedOrders({ admin, customers, services }) {
       customerNotes: "Tolong pisahkan pakaian putih.",
       adminNotes: "Sudah diserahkan ke pelanggan.",
       items: [
-        { service: "Cuci Kering Setrika Express", weight: "4.50" },
-        { service: "Cuci Sepatu", quantity: 1 },
+        { service: "Express", weight: "4.50" },
+        { service: "Sprei", quantity: 1 },
       ],
       additionalCost: "0.00",
     },
@@ -349,7 +385,7 @@ async function seedOrders({ admin, customers, services }) {
       paymentStatus: PAYMENT_STATUS.PAID,
       customerNotes: null,
       adminNotes: null,
-      items: [{ service: "Cuci Kering Reguler", weight: "6.20" }],
+      items: [{ service: "Cuci Setrika", weight: "6.20" }],
       additionalCost: "5000.00",
     },
     {
@@ -357,11 +393,11 @@ async function seedOrders({ admin, customers, services }) {
       createdAt: daysAgo(4),
       status: ORDER_STATUS.READY_FOR_PICKUP,
       paymentStatus: PAYMENT_STATUS.WAITING_VERIFICATION,
-      customerNotes: "Bed cover ada noda kopi.",
+      customerNotes: "Selimut ada noda kopi.",
       adminNotes: null,
       items: [
-        { service: "Cuci Bed Cover", quantity: 2 },
-        { service: "Cuci Kering Reguler", weight: "3.00" },
+        { service: "Selimut", quantity: 2 },
+        { service: "Bed Cover", quantity: 1 },
       ],
       additionalCost: "0.00",
     },
@@ -372,7 +408,7 @@ async function seedOrders({ admin, customers, services }) {
       paymentStatus: PAYMENT_STATUS.UNPAID,
       customerNotes: "Jangan pakai pewangi.",
       adminNotes: null,
-      items: [{ service: "Cuci Kering Setrika Express", weight: "5.00" }],
+      items: [{ service: "Express", weight: "5.00" }],
       additionalCost: "0.00",
     },
     {
@@ -383,8 +419,8 @@ async function seedOrders({ admin, customers, services }) {
       customerNotes: null,
       adminNotes: "Menunggu penimbangan.",
       items: [
-        { service: "Cuci Jas / Gaun", quantity: 1 },
-        { service: "Setrika Saja", weight: null },
+        { service: "Sprei", quantity: 1 },
+        { service: "Setrika", weight: null },
       ],
       additionalCost: "0.00",
     },
@@ -395,7 +431,7 @@ async function seedOrders({ admin, customers, services }) {
       paymentStatus: PAYMENT_STATUS.UNPAID,
       customerNotes: "Diambil sore hari.",
       adminNotes: null,
-      items: [{ service: "Cuci Kering Reguler", weight: null }],
+      items: [{ service: "Cuci Setrika", weight: null }],
       additionalCost: "0.00",
     },
   ];

@@ -9,11 +9,11 @@ import {
   ArrowLeft,
   Clock,
   Download,
-  Shirt,
 } from "@/components/ui/icons";
 import OrderStatusBadge from "@/components/ui/OrderStatusBadge";
 import PageHeader from "@/components/ui/PageHeader";
 import PaymentStatusBadge from "@/components/ui/PaymentStatusBadge";
+import ServiceIcon from "@/components/ui/ServiceIcon";
 import { requireCustomer } from "@/lib/auth";
 import {
   ORDER_STATUS,
@@ -24,7 +24,10 @@ import {
 import { formatCurrency, formatDateTime, formatWeight } from "@/lib/format";
 import { getPaymentInfo } from "@/lib/settings";
 import { getMaxUploadSizeMb } from "@/lib/uploads";
-import { getCustomerOrderDetail } from "@/services/orderService";
+import {
+  getCustomerOrderDetail,
+  isAwaitingWeighing,
+} from "@/services/orderService";
 
 export const metadata = { title: "Detail Pesanan" };
 
@@ -39,15 +42,28 @@ export default async function CustomerOrderDetailPage({ params }) {
   }
 
   const paymentInfo = await getPaymentInfo();
-  const hasPendingWeight = order.items.some(
-    (item) => item.priceUnitSnapshot === PRICE_UNITS.KG && item.weight === null,
-  );
+
+  // Total biaya belum final selama masih ada layanan KG yang belum ditimbang,
+  // sehingga bukti transfer belum boleh diunggah.
+  const hasPendingWeight = isAwaitingWeighing(order);
 
   const paymentStatus = order.payment?.status ?? PAYMENT_STATUS.UNPAID;
-  const canUploadReceipt =
-    order.status !== ORDER_STATUS.CANCELLED &&
-    (paymentStatus === PAYMENT_STATUS.UNPAID ||
-      paymentStatus === PAYMENT_STATUS.REJECTED);
+  const isCancelled = order.status === ORDER_STATUS.CANCELLED;
+
+  /**
+   * Menentukan tampilan bagian pembayaran (satu tempat agar urutan
+   * prioritasnya jelas).
+   */
+  const paymentAction =
+    paymentStatus === PAYMENT_STATUS.PAID
+      ? "paid"
+      : paymentStatus === PAYMENT_STATUS.WAITING_VERIFICATION
+        ? "waiting"
+        : isCancelled
+          ? "cancelled"
+          : hasPendingWeight
+            ? "pending-weight"
+            : "upload";
 
   const amountLabel = hasPendingWeight
     ? `${formatCurrency(order.totalPrice)} (sementara)`
@@ -130,7 +146,13 @@ export default async function CustomerOrderDetailPage({ params }) {
           <Card>
             <CardHeader
               title="Pembayaran"
-              description="Transfer ke rekening berikut, lalu unggah buktinya."
+              description={
+                paymentAction === "upload"
+                  ? "Transfer ke rekening berikut, lalu unggah buktinya."
+                  : paymentAction === "pending-weight"
+                    ? "Total biaya belum final karena pesanan belum ditimbang."
+                    : "Rincian pembayaran pesanan ini."
+              }
             />
             <CardBody className="space-y-4">
               <div className="flex items-center justify-between gap-3">
@@ -187,20 +209,26 @@ export default async function CustomerOrderDetailPage({ params }) {
                 </div>
               ) : null}
 
-              {canUploadReceipt ? (
+              {paymentAction === "upload" ? (
                 <div className="border-t border-slate-200 pt-4">
                   <ReceiptUploadForm
                     orderId={order.id}
                     maxSizeMb={getMaxUploadSizeMb()}
                   />
                 </div>
-              ) : paymentStatus === PAYMENT_STATUS.WAITING_VERIFICATION ? (
+              ) : paymentAction === "waiting" ? (
                 <Alert variant="info">
                   Bukti transfer sedang menunggu verifikasi admin.
                 </Alert>
-              ) : paymentStatus === PAYMENT_STATUS.PAID ? (
+              ) : paymentAction === "paid" ? (
                 <Alert variant="success">
                   Pembayaran pesanan ini sudah diverifikasi lunas.
+                </Alert>
+              ) : paymentAction === "pending-weight" ? (
+                <Alert variant="warning">
+                  Pesanan Anda masih <strong>menunggu penimbangan</strong>. Bukti
+                  transfer dapat diunggah setelah admin selesai menimbang, agar
+                  nominal yang dibayar sudah pasti.
                 </Alert>
               ) : (
                 <Alert variant="info">
@@ -223,7 +251,11 @@ export default async function CustomerOrderDetailPage({ params }) {
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <p className="flex items-center gap-2 text-sm font-medium text-slate-800">
-                        <Shirt className="h-4 w-4 shrink-0 text-brand-blue" />
+                        <ServiceIcon
+                          name={item.serviceNameSnapshot}
+                          priceUnit={item.priceUnitSnapshot}
+                          size="xs"
+                        />
                         {item.serviceNameSnapshot}
                       </p>
                       <p className="mt-0.5 text-xs text-slate-500">
@@ -262,7 +294,11 @@ export default async function CustomerOrderDetailPage({ params }) {
                     <tr key={item.id}>
                       <td className="px-5 py-3">
                         <p className="flex items-center gap-2 font-medium text-slate-800">
-                          <Shirt className="h-4 w-4 text-brand-blue" />
+                          <ServiceIcon
+                            name={item.serviceNameSnapshot}
+                            priceUnit={item.priceUnitSnapshot}
+                            size="xs"
+                          />
                           {item.serviceNameSnapshot}
                         </p>
                       </td>

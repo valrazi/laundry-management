@@ -18,9 +18,11 @@ import OrderStatusBadge from "@/components/ui/OrderStatusBadge";
 import PageHeader from "@/components/ui/PageHeader";
 import PaymentStatusBadge from "@/components/ui/PaymentStatusBadge";
 import { formatCurrency, formatDateTime, formatWeight } from "@/lib/format";
-import { PRICE_UNITS } from "@/lib/constants";
 import { serializeOrderForClient } from "@/lib/serialize";
-import { getAdminOrderDetail } from "@/services/orderService";
+import {
+  getAdminOrderDetail,
+  isAwaitingWeighing,
+} from "@/services/orderService";
 
 export const metadata = { title: "Detail Pesanan" };
 
@@ -32,9 +34,7 @@ export default async function AdminOrderDetailPage({ params }) {
     notFound();
   }
 
-  const hasPendingWeight = order.items.some(
-    (item) => item.priceUnitSnapshot === PRICE_UNITS.KG && item.weight === null,
-  );
+  const hasPendingWeight = isAwaitingWeighing(order);
 
   const clientOrder = serializeOrderForClient(order);
 
@@ -200,6 +200,12 @@ export default async function AdminOrderDetailPage({ params }) {
                 <span className="text-sm text-slate-500">Status</span>
                 <PaymentStatusBadge status={order.payment?.status} />
               </div>
+              {hasPendingWeight ? (
+                <Alert variant="warning">
+                  Pesanan belum ditimbang, sehingga pelanggan belum dapat
+                  mengunggah bukti transfer. Total tagihan masih sementara.
+                </Alert>
+              ) : null}
               {order.payment?.rejectionReason ? (
                 <Alert variant="error">
                   Alasan penolakan: {order.payment.rejectionReason}

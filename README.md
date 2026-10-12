@@ -168,6 +168,24 @@ Seed **tidak** mengirim notifikasi WhatsApp apa pun.
 > Catatan: seed melewati pembuatan contoh pesanan bila tabel `orders` sudah berisi
 > data. Gunakan `npm run db:reset` untuk membangun ulang dari nol.
 
+**Menu layanan laundry** — sumber tunggal ada pada `SERVICE_SEEDS` di
+`prisma/seed.js`:
+
+| Layanan | Harga | Satuan |
+|---|---|---|
+| Cuci Setrika | Rp 5.000 | per kg |
+| Setrika | Rp 4.000 | per kg |
+| Express | Rp 8.000 | per kg |
+| Sprei | Rp 10.000 | per pcs |
+| Selimut | Rp 15.000 | per pcs |
+| Bed Cover | Rp 25.000 | per pcs |
+
+Perubahan menu sehari-hari dilakukan lewat **Admin → Layanan** tanpa mengubah
+kode. Bila ingin menyamakan data seed dengan daftar di atas, ubah `SERVICE_SEEDS`
+lalu jalankan `npm run db:seed`. Seed akan membuat atau memperbarui layanan
+tersebut dan **menonaktifkan** (bukan menghapus) layanan dari versi seed
+sebelumnya, agar tautan serta snapshot transaksi lama tetap utuh.
+
 ---
 
 ## 8. Menjalankan Server Development
@@ -413,7 +431,8 @@ dengan object storage di kemudian hari tanpa mengubah lapisan bisnis.
    nilai historis.
 4. **Berat aktual diisi manual oleh admin** per item KG. Jika belum ditimbang, total
    yang tampil kepada pelanggan adalah nilai sementara dan ditandai
-   "Menunggu penimbangan".
+   "Menunggu penimbangan". Pelanggan baru dapat mengunggah bukti transfer setelah
+   penimbangan selesai agar nominal yang dibayar sudah pasti.
 5. **Penyimpanan file di disk lokal** — tidak cocok untuk deployment serverless
    (lihat bagian 13).
 6. **Ekspor laporan dibatasi 500 baris** per permintaan. Persempit filter untuk
@@ -535,13 +554,15 @@ dirancang mobile-first:
 
 | Penyesuaian | Keterangan |
 |---|---|
-| **Navigasi bawah** | Empat menu utama (Beranda, Pesanan, Pesan Baru, Profil) pada bilah tetap di bawah layar, dengan tinggi sentuh >= 60 px. Menu lengkap tetap muncul di header pada layar >= 768 px. |
+| **Navigasi bawah** | Lima menu pada bilah tetap di bawah layar: Beranda · Pesanan · **Pesan** · Profil · Keluar. Jumlah ganjil membuat tombol tambah pesanan tepat berada di tengah dan tombol keluar di ujung kanan. Tinggi sel 63 px. |
+| **Satu tombol keluar** | Pada ponsel, keluar hanya ada di bilah bawah (header bersih). Pada layar >= 768 px, bilah bawah disembunyikan dan tombol keluar muncul kembali di header bersama menu lengkap. |
 | **Kartu, bukan tabel** | Daftar pesanan pada ponsel memakai kartu bertumpuk yang mudah disentuh; tabel hanya muncul pada layar >= 768 px. |
 | **Urutan prioritas** | Pada detail pesanan, kartu **Pembayaran** tampil lebih dulu di ponsel, lalu bertukar posisi ke kanan pada layar besar. |
 | **Input anti-zoom iOS** | Seluruh input memakai ukuran font 16 px pada layar kecil agar Safari iOS tidak memperbesar halaman otomatis saat input difokuskan. |
 | **Sasaran sentuh** | Tombol ukuran sedang/besar memiliki tinggi minimal 44 px. |
 | **Keyboard ponsel** | `inputMode`, `autoComplete`, `autoCapitalize`, dan `autoCorrect` disetel sesuai jenis data (email, telepon, angka). |
 | **Ruang aman** | Konten diberi jarak bawah agar tidak tertutup navigasi bawah, termasuk `env(safe-area-inset-bottom)` untuk perangkat berponi. |
+| **Ikon layanan** | Setiap kartu layanan diberi badge ikon + warna yang dipilih otomatis dari kata kunci nama layanan (`src/components/ui/ServiceIcon.jsx`). Layanan baru buatan admin langsung mendapat ikon tanpa perlu kolom tambahan di database. Form Admin → Layanan menampilkan pratinjau ikon saat nama diketik. |
 
 Area admin tetap dioptimalkan untuk desktop/tablet (sidebar navy) sesuai PRD.
 
@@ -572,6 +593,15 @@ UNPAID ──▶ WAITING_VERIFICATION ──▶ PAID
 
 Verifikasi pembayaran **tidak** mengubah status pesanan secara otomatis, dan
 mengunggah bukti transfer **tidak** berarti pembayaran lunas.
+
+> **Prasyarat unggah bukti transfer — pesanan tidak boleh menunggu penimbangan.**
+> Selama masih ada layanan berbasis KG yang berat aktualnya belum diisi admin,
+> total biaya belum final sehingga pengajuan pembayaran ditolak. Aturan ini
+> diperiksa di server (`isAwaitingWeighing()` pada `src/services/orderService.js`
+> yang dipakai `submitPaymentReceipt`), dan pada UI form unggah diganti dengan
+> keterangan agar pelanggan paham alasannya. Admin juga melihat catatan serupa di
+> halaman detail pesanan. Ini mencegah pelanggan membayar nominal yang masih
+> sementara.
 
 ---
 
@@ -632,7 +662,8 @@ Dijalankan pada repositori ini (Node.js 24.21.0, MySQL 8.0.46):
 | Lint | `npm run lint` | ✅ Tidak ada warning/error |
 | Pengujian otomatis | `npm test` | ✅ 147/147 skenario lulus (11 berkas) |
 | Pemeriksaan asap runtime | `node scripts/smoke-test.mjs` | ✅ 19/19 pemeriksaan lulus |
-| Uji responsif 390 px | *Computed style* pada viewport 390 px | ✅ Navigasi bawah tampil; navigasi desktop & tabel tersembunyi |
+| Uji responsif 390 px | *Computed style* pada viewport 390 px | ✅ Navigasi bawah tampil (5 kolom), navigasi desktop & tabel tersembunyi |
+| Uji bilah bawah 320–390 px | *Computed style* pada 320, 360, 390 px | ✅ 5 kolom sama lebar, tanpa overflow, tinggi sel 63 px, label tidak terpotong |
 
 > Catatan: baris terakhir diverifikasi dengan membaca *computed style* pada viewport
 > 390 px (bukan sekadar pratinjau desain). Untuk memeriksa sendiri: buka aplikasi di

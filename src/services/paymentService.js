@@ -10,7 +10,12 @@
  */
 
 import prisma from "@/lib/prisma";
-import { ORDER_STATUS, PAYMENT_REVIEW_ACTION, PAYMENT_STATUS } from "@/lib/constants";
+import {
+  ORDER_STATUS,
+  PAYMENT_REVIEW_ACTION,
+  PAYMENT_STATUS,
+  PRICE_UNITS,
+} from "@/lib/constants";
 import {
   bufferFromUploadedFile,
   deleteReceiptFile,
@@ -18,6 +23,7 @@ import {
 } from "@/lib/uploads";
 
 import { notifyPaymentEvent } from "./notificationService";
+import { isAwaitingWeighing } from "./orderService";
 
 const paymentListInclude = {
   order: {
@@ -51,7 +57,7 @@ export async function ensurePaymentRecord(order) {
 export async function submitPaymentReceipt({ orderId, customerId, file }) {
   const order = await prisma.order.findFirst({
     where: { id: orderId, customerId },
-    include: { payment: true },
+    include: { payment: true, items: true },
   });
 
   if (!order) {
@@ -62,6 +68,17 @@ export async function submitPaymentReceipt({ orderId, customerId, file }) {
     return {
       ok: false,
       message: "Pesanan sudah dibatalkan sehingga tidak dapat dibayar.",
+    };
+  }
+
+  // Total biaya belum final selama masih ada layanan KG yang belum ditimbang.
+  // Pembayaran baru boleh diajukan setelah penimbangan selesai agar pelanggan
+  // tidak membayar nominal yang masih sementara.
+  if (isAwaitingWeighing(order)) {
+    return {
+      ok: false,
+      message:
+        "Total biaya belum final karena pesanan masih menunggu penimbangan. Bukti transfer dapat diunggah setelah admin selesai menimbang pesanan Anda.",
     };
   }
 

@@ -13,6 +13,7 @@ import Button from "@/components/ui/Button";
 import ConfirmButton from "@/components/ui/ConfirmButton";
 import { Card, CardBody, CardHeader } from "@/components/ui/Card";
 import { Field, Input, Select, Textarea } from "@/components/ui/Form";
+import ServiceIcon from "@/components/ui/ServiceIcon";
 import { Pencil, Plus, Save, X } from "@/components/ui/icons";
 import { PRICE_UNIT_LABELS, PRICE_UNIT_SHORT, PRICE_UNITS } from "@/lib/constants";
 
@@ -27,6 +28,9 @@ export function formatRupiah(value) {
 
 function CreateServiceForm() {
   const [state, formAction, pending] = useActionState(createServiceAction, null);
+  // State dipakai hanya untuk pratinjau ikon layanan secara langsung.
+  const [name, setName] = useState("");
+  const [priceUnit, setPriceUnit] = useState(PRICE_UNITS.KG);
 
   return (
     <Card>
@@ -47,15 +51,21 @@ function CreateServiceForm() {
               label="Nama layanan"
               htmlFor="new-name"
               error={state?.fieldErrors?.name}
+              hint="Ikon kartu dipilih otomatis dari kata kunci nama layanan."
               required
               className="lg:col-span-2"
             >
-              <Input
-                id="new-name"
-                name="name"
-                placeholder="Contoh: Cuci Kering Reguler"
-                required
-              />
+              <div className="flex items-center gap-2">
+                <ServiceIcon name={name} priceUnit={priceUnit} />
+                <Input
+                  id="new-name"
+                  name="name"
+                  placeholder="Contoh: Cuci Setrika"
+                  value={name}
+                  onChange={(event) => setName(event.target.value)}
+                  required
+                />
+              </div>
             </Field>
 
             <Field
@@ -81,7 +91,12 @@ function CreateServiceForm() {
               error={state?.fieldErrors?.priceUnit}
               required
             >
-              <Select id="new-priceUnit" name="priceUnit" defaultValue={PRICE_UNITS.KG}>
+              <Select
+                id="new-priceUnit"
+                name="priceUnit"
+                value={priceUnit}
+                onChange={(event) => setPriceUnit(event.target.value)}
+              >
                 {UNIT_OPTIONS.map((unit) => (
                   <option key={unit} value={unit}>
                     {PRICE_UNIT_LABELS[unit]}
@@ -127,6 +142,9 @@ function CreateServiceForm() {
 
 function EditServiceForm({ service, onClose }) {
   const [state, formAction, pending] = useActionState(updateServiceAction, null);
+  // State dipakai hanya untuk pratinjau ikon layanan secara langsung.
+  const [name, setName] = useState(service.name);
+  const [priceUnit, setPriceUnit] = useState(service.priceUnit);
 
   return (
     <form action={formAction} className="space-y-4 bg-slate-50 p-4">
@@ -143,12 +161,16 @@ function EditServiceForm({ service, onClose }) {
           error={state?.fieldErrors?.name}
           className="lg:col-span-2"
         >
-          <Input
-            id={`name-${service.id}`}
-            name="name"
-            defaultValue={service.name}
-            required
-          />
+          <div className="flex items-center gap-2">
+            <ServiceIcon name={name} priceUnit={priceUnit} />
+            <Input
+              id={`name-${service.id}`}
+              name="name"
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              required
+            />
+          </div>
         </Field>
 
         <Field
@@ -175,7 +197,8 @@ function EditServiceForm({ service, onClose }) {
           <Select
             id={`unit-${service.id}`}
             name="priceUnit"
-            defaultValue={service.priceUnit}
+            value={priceUnit}
+            onChange={(event) => setPriceUnit(event.target.value)}
           >
             {UNIT_OPTIONS.map((unit) => (
               <option key={unit} value={unit}>
@@ -248,26 +271,32 @@ export default function ServiceManager({ services }) {
             {services.map((service) => (
               <div key={service.id}>
                 <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-4">
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <p className="font-medium text-slate-800">
-                        {service.name}
+                  <div className="flex min-w-0 items-center gap-3">
+                    <ServiceIcon
+                      name={service.name}
+                      priceUnit={service.priceUnit}
+                    />
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="font-medium text-slate-800">
+                          {service.name}
+                        </p>
+                        {service.isActive ? (
+                          <Badge tone="success">Aktif</Badge>
+                        ) : (
+                          <Badge tone="danger">Nonaktif</Badge>
+                        )}
+                      </div>
+                      <p className="mt-0.5 text-sm text-slate-600">
+                        {formatRupiah(service.price)}
+                        {PRICE_UNIT_SHORT[service.priceUnit] ?? ""}
                       </p>
-                      {service.isActive ? (
-                        <Badge tone="success">Aktif</Badge>
-                      ) : (
-                        <Badge tone="danger">Nonaktif</Badge>
-                      )}
+                      {service.description ? (
+                        <p className="mt-0.5 text-xs text-slate-500">
+                          {service.description}
+                        </p>
+                      ) : null}
                     </div>
-                    <p className="mt-0.5 text-sm text-slate-600">
-                      {formatRupiah(service.price)}
-                      {PRICE_UNIT_SHORT[service.priceUnit] ?? ""}
-                    </p>
-                    {service.description ? (
-                      <p className="mt-0.5 text-xs text-slate-500">
-                        {service.description}
-                      </p>
-                    ) : null}
                   </div>
 
                   <div className="flex items-center gap-2">
