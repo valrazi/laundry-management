@@ -1,0 +1,3 @@
+# Folder ini menyimpan bukti transfer yang diunggah pelanggan.
+# File di dalamnya TIDAK boleh disajikan sebagai aset publik.
+# Akses hanya melalui route handler yang memeriksa autentikasi & kepemilikan.

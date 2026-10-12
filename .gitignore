@@ -1,0 +1,21 @@
+node_modules/
+.next/
+out/
+build/
+coverage/
+
+# Environment & secrets
+.env
+.env.local
+.env*.local
+
+# Unggahan bersifat privat (bukti transfer) dan tidak boleh ikut ke repo.
+uploads/*
+!uploads/.gitkeep
+
+# Log & OS
+npm-debug.log*
+*.log
+.DS_Store
+Thumbs.db
+AGENTS.md

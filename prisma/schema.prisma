@@ -1,0 +1,268 @@
+// Prisma schema — Sistem Informasi Manajemen Laundry
+// Database: MySQL 8
+// Catatan: nilai uang memakai Decimal (bukan Float) agar perhitungan tidak
+// mengalami galat pembulatan floating point.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+// ------------------------------------------------------------------
+// Enum
+// ------------------------------------------------------------------
+
+enum Role {
+  ADMIN
+  CUSTOMER
+}
+
+enum PriceUnit {
+  KG
+  ITEM
+}
+
+enum OrderStatus {
+  PENDING
+  CONFIRMED
+  PROCESSING
+  READY_FOR_PICKUP
+  COMPLETED
+  CANCELLED
+}
+
+enum PaymentStatus {
+  UNPAID
+  WAITING_VERIFICATION
+  PAID
+  REJECTED
+}
+
+enum PaymentReviewAction {
+  SUBMITTED
+  VERIFIED
+  REJECTED
+}
+
+enum NotificationStatus {
+  PENDING
+  SENT
+  FAILED
+}
+
+// ------------------------------------------------------------------
+// Model
+// ------------------------------------------------------------------
+
+model User {
+  id           String   @id @default(cuid())
+  name         String   @db.VarChar(120)
+  email        String   @unique @db.VarChar(190)
+  phone        String   @unique @db.VarChar(20)
+  passwordHash String   @db.VarChar(255)
+  role         Role     @default(CUSTOMER)
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  orders           Order[]              @relation("CustomerOrders")
+  sessions         Session[]
+  statusChanges    OrderStatusHistory[] @relation("StatusChangedBy")
+  verifiedPayments Payment[]            @relation("PaymentVerifiedBy")
+  paymentReviews   PaymentReview[]      @relation("PaymentReviewedBy")
+
+  @@index([role])
+  @@index([isActive])
+  @@map("users")
+}
+
+/// Sesi login aktif. `id` menyimpan hash SHA-256 dari token di cookie,
+/// sehingga token asli tidak pernah tersimpan di database.
+model Session {
+  id        String   @id @db.Char(64)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("sessions")
+}
+
+model Service {
+  id          String    @id @default(cuid())
+  name        String    @db.VarChar(120)
+  description String?   @db.Text
+  price       Decimal   @db.Decimal(12, 2)
+  priceUnit   PriceUnit
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  orderItems OrderItem[]
+
+  @@index([isActive])
+  @@index([name])
+  @@map("services")
+}
+
+model Order {
+  id             String      @id @default(cuid())
+  orderNumber    String      @unique @db.VarChar(32)
+  customerId     String
+  customer       User        @relation("CustomerOrders", fields: [customerId], references: [id], onDelete: Restrict)
+  status         OrderStatus @default(PENDING)
+  /// Berat aktual total (kg) yang diisi admin. null = belum ditimbang.
+  weight         Decimal?    @db.Decimal(10, 2)
+  subtotal       Decimal     @default(0) @db.Decimal(12, 2)
+  additionalCost Decimal     @default(0) @db.Decimal(12, 2)
+  totalPrice     Decimal     @default(0) @db.Decimal(12, 2)
+  customerNotes  String?     @db.Text
+  adminNotes     String?     @db.Text
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+  completedAt    DateTime?
+
+  items            OrderItem[]
+  statusHistory    OrderStatusHistory[]
+  payment          Payment?
+  notificationLogs NotificationLog[]
+
+  @@index([customerId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("orders")
+}
+
+model OrderItem {
+  id                  String    @id @default(cuid())
+  orderId             String
+  order               Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  /// nullable jika layanan dihapus di kemudian hari — snapshot tetap tersimpan
+  serviceId           String?
+  service             Service?  @relation(fields: [serviceId], references: [id], onDelete: SetNull)
+  serviceNameSnapshot String    @db.VarChar(120)
+  priceSnapshot       Decimal   @db.Decimal(12, 2)
+  priceUnitSnapshot   PriceUnit
+  /// Dipakai untuk layanan ber-satuan ITEM
+  quantity            Int?
+  /// Dipakai untuk layanan ber-satuan KG (berat aktual per item)
+  weight              Decimal?  @db.Decimal(10, 2)
+  subtotal            Decimal   @default(0) @db.Decimal(12, 2)
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  @@index([orderId])
+  @@index([serviceId])
+  @@map("order_items")
+}
+
+model OrderStatusHistory {
+  id              String       @id @default(cuid())
+  orderId         String
+  order           Order        @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  oldStatus       OrderStatus?
+  newStatus       OrderStatus
+  changedByUserId String?
+  changedBy       User?        @relation("StatusChangedBy", fields: [changedByUserId], references: [id], onDelete: SetNull)
+  notes           String?      @db.Text
+  createdAt       DateTime     @default(now())
+
+  @@index([orderId])
+  @@index([createdAt])
+  @@map("order_status_histories")
+}
+
+/// Satu pembayaran aktif per pesanan (orderId unik). Keputusan verifikasi
+/// dicatat pada PaymentReview sehingga riwayat tetap terjaga walaupun
+/// pelanggan mengunggah ulang bukti transfer yang ditolak.
+model Payment {
+  id               String        @id @default(cuid())
+  orderId          String        @unique
+  order            Order         @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  amount           Decimal       @db.Decimal(12, 2)
+  status           PaymentStatus @default(UNPAID)
+  proofFilePath    String?       @db.VarChar(255)
+  proofOriginalName String?      @db.VarChar(190)
+  proofMimeType    String?       @db.VarChar(64)
+  proofSize        Int?
+  proofUploadedAt  DateTime?
+  rejectionReason  String?       @db.Text
+  verifiedByUserId String?
+  verifiedBy       User?         @relation("PaymentVerifiedBy", fields: [verifiedByUserId], references: [id], onDelete: SetNull)
+  verifiedAt       DateTime?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  reviews          PaymentReview[]
+  notificationLogs NotificationLog[]
+
+  @@index([status])
+  @@map("payments")
+}
+
+model PaymentReview {
+  id               String              @id @default(cuid())
+  paymentId        String
+  payment          Payment             @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  action           PaymentReviewAction
+  reason           String?             @db.Text
+  amount           Decimal             @db.Decimal(12, 2)
+  reviewedByUserId String?
+  reviewedBy       User?               @relation("PaymentReviewedBy", fields: [reviewedByUserId], references: [id], onDelete: SetNull)
+  createdAt        DateTime            @default(now())
+
+  @@index([paymentId])
+  @@map("payment_reviews")
+}
+
+model NotificationTemplate {
+  id        String   @id @default(cuid())
+  eventKey  String   @unique @db.VarChar(64)
+  name      String   @db.VarChar(120)
+  message   String   @db.Text
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("notification_templates")
+}
+
+model NotificationLog {
+  id               String             @id @default(cuid())
+  orderId          String?
+  order            Order?             @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  paymentId        String?
+  payment          Payment?           @relation(fields: [paymentId], references: [id], onDelete: SetNull)
+  recipientPhone   String             @db.VarChar(20)
+  eventKey         String             @db.VarChar(64)
+  messageSnapshot  String             @db.Text
+  status           NotificationStatus @default(PENDING)
+  providerResponse String?            @db.Text
+  errorMessage     String?            @db.Text
+  attempt          Int                @default(1)
+  isDryRun         Boolean            @default(false)
+  createdAt        DateTime           @default(now())
+  sentAt           DateTime?
+
+  @@index([orderId])
+  @@index([paymentId])
+  @@index([status])
+  @@index([eventKey])
+  @@index([createdAt])
+  @@map("notification_logs")
+}
+
+model SystemSetting {
+  id        String   @id @default(cuid())
+  key       String   @unique @db.VarChar(64)
+  value     String   @db.Text
+  updatedAt DateTime @updatedAt
+
+  @@map("system_settings")
+}

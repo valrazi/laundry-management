@@ -1,0 +1,25 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    @apply bg-slate-50 text-slate-800 antialiased;
+  }
+
+  /* Semua fokus keyboard harus terlihat jelas. */
+  :focus-visible {
+    @apply outline-none ring-2 ring-brand-blue/50;
+  }
+}
+
+@layer utilities {
+  /* Tabel panjang tetap bisa dibaca pada layar kecil. */
+  .table-scroll {
+    @apply w-full overflow-x-auto;
+  }
+}
