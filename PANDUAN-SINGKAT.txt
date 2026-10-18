@@ -19,6 +19,21 @@ Jangan tutup jendela hitam selama aplikasi dipakai.
 Untuk menghentikan aplikasi: tekan Ctrl+C di jendela itu, lalu Y.
 
 
+MEMBUKA APLIKASI KE INTERNET UNTUK DOSEN
+-----------------------------------------
+1. Jalankan 3-JALANKAN.bat dan biarkan jendelanya tetap terbuka.
+2. Klik 5-NGROK.bat.
+3. Salin alamat https://....ngrok-free.app yang muncul.
+   Itu alamat yang dibagikan ke dosen.
+
+Butuh akun ngrok gratis di https://ngrok.com.
+Sekali saja, jalankan di Command Prompt:
+   ngrok config add-authtoken TOKEN_ANDA
+
+Bila port aplikasi bukan 3000, jalankan dari Command Prompt:
+   5-NGROK.bat 3001
+
+
 BILA ADA VERSI BARU
 -------------------
 1. Tutup aplikasi yang sedang berjalan.
