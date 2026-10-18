@@ -1,0 +1,42 @@
+PANDUAN SINGKAT - APLIKASI LAUNDRY
+===================================
+
+Jalankan file .bat secara berurutan. Cukup klik dua kali.
+
+
+URUTAN PEMAKAIAN PERTAMA KALI
+-----------------------------
+1. 1-INSTALL.bat     Memasang semua komponen. Perlu internet.
+2. 2-MIGRATE.bat     Menyiapkan database dan data awal.
+3. 3-JALANKAN.bat    Menjalankan aplikasi, browser terbuka otomatis.
+
+
+PEMAKAIAN SEHARI-HARI
+---------------------
+Cukup klik 3-JALANKAN.bat.
+Jangan tutup jendela hitam selama aplikasi dipakai.
+
+Untuk menghentikan aplikasi: tekan Ctrl+C di jendela itu, lalu Y.
+
+
+BILA ADA VERSI BARU
+-------------------
+1. Tutup aplikasi yang sedang berjalan.
+2. Klik 4-UPDATE.bat.
+3. Klik 3-JALANKAN.bat.
+
+
+YANG PERLU DIPASANG DI KOMPUTER
+-------------------------------
+- Node.js versi LTS       https://nodejs.org
+- MySQL atau XAMPP        https://www.apachefriends.org
+- Git                     https://git-scm.com
+
+
+BILA MUNCUL PESAN GAGAL
+-----------------------
+- "MySQL belum menyala"      -> nyalakan MySQL di XAMPP Control Panel.
+- "DATABASE_URL salah"       -> buka file .env, periksa password MySQL.
+- "Node.js belum terpasang"  -> pasang Node.js, lalu ulangi 1-INSTALL.bat.
+
+Detail lengkap ada di README.md.

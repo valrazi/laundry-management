@@ -258,6 +258,31 @@ model NotificationLog {
   @@map("notification_logs")
 }
 
+/// Catatan balasan otomatis (auto-reply) yang dikirim oleh gateway WhatsApp lokal.
+/// Kombinasi `senderKey` + `dayKey` unik, sehingga satu pengirim hanya menerima
+/// satu balasan otomatis per hari (menurut zona waktu Asia/Jakarta).
+/// Tabel ini diisi oleh layanan gateway (whatsapp-gateway), bukan oleh aplikasi web.
+model AutoReplyLog {
+  id                String   @id @default(cuid())
+  /// Identitas pengirim: nomor telepon (mis. "628123456789") atau "lid:<id>".
+  senderKey         String   @db.VarChar(64)
+  /// JID tujuan balasan yang benar-benar dipakai gateway.
+  senderJid         String   @db.VarChar(190)
+  /// Nama tampilan pengirim dari WhatsApp, bila tersedia.
+  pushName          String?  @db.VarChar(120)
+  /// Tanggal (YYYY-MM-DD) menurut zona waktu Asia/Jakarta.
+  dayKey            String   @db.Char(10)
+  messageSnapshot   String   @db.Text
+  /// ID pesan dari WhatsApp, diisi setelah pengiriman berhasil.
+  providerMessageId String?  @db.VarChar(128)
+  createdAt         DateTime @default(now())
+
+  @@unique([senderKey, dayKey])
+  @@index([dayKey])
+  @@index([createdAt])
+  @@map("auto_reply_logs")
+}
+
 model SystemSetting {
   id        String   @id @default(cuid())
   key       String   @unique @db.VarChar(64)
