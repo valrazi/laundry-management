@@ -26,17 +26,28 @@ if errorlevel 1 (
   goto :selesai
 )
 
-echo Pastikan aplikasi laundry sudah berjalan lebih dulu
-echo lewat 3-JALANKAN.bat.
-echo.
-echo Setelah ngrok menyala, akan muncul alamat seperti:
-echo    https://xxxx-xxxx-xxxx.ngrok-free.app
-echo Alamat itulah yang dibagikan ke dosen atau teman.
+if not exist "scripts\ngrok-sync-app-url.mjs" (
+  echo [PERINGATAN] Script pembaru APP_URL tidak ditemukan.
+  echo Alamat publik tetap muncul, tetapi APP_URL tidak diperbarui.
+)
+
+netstat -ano | findstr ":3000" | findstr "LISTENING" >nul 2>nul
+if not errorlevel 1 (
+  echo [CATATAN] Aplikasi laundry sedang berjalan.
+  echo Setelah alamat publik muncul, tutup jendela 3-JALANKAN.bat lalu
+  echo jalankan lagi supaya link pesanan memakai alamat baru.
+  echo.
+)
+
+echo Alamat publik akan muncul di bawah ini, dan APP_URL di file .env
+echo akan otomatis diperbarui. Perhatikan baris:
+echo    [ngrok] APP_URL diperbarui menjadi https://...
 echo.
 echo JANGAN tutup jendela ini selama alamat tersebut dipakai.
 echo Untuk berhenti, tekan Ctrl+C.
 echo.
 
+start "" /b node scripts\ngrok-sync-app-url.mjs
 ngrok http %PORT%
 
 :selesai

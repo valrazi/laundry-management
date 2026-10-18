@@ -26,6 +26,11 @@ MEMBUKA APLIKASI KE INTERNET UNTUK DOSEN
 3. Salin alamat https://....ngrok-free.app yang muncul.
    Itu alamat yang dibagikan ke dosen.
 
+Alamat publik itu juga otomatis ditulis ke APP_URL di file .env,
+supaya link pesanan di WhatsApp bisa dibuka dari HP pelanggan.
+Bila aplikasi sudah berjalan sebelum ngrok dinyalakan, tutup lalu
+jalankan lagi 3-JALANKAN.bat agar alamat baru terpakai.
+
 Butuh akun ngrok gratis di https://ngrok.com.
 Sekali saja, jalankan di Command Prompt:
    ngrok config add-authtoken TOKEN_ANDA
