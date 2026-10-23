@@ -10,7 +10,6 @@
  *   password default yang tertanam di kode.
  */
 
-import { randomBytes } from "node:crypto";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { deflateSync } from "node:zlib";
@@ -35,31 +34,22 @@ const {
   PRICE_UNITS,
   ROLES,
 } = await import("../src/lib/constants.js");
+const { buildOrderNumber, jakartaDateStampShort, resolveOrderCodePrefix } =
+  await import("../src/lib/orderCode.js");
 
-const ORDER_NUMBER_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+/**
+ * Nomor urut contoh pesanan per prefix & tanggal, agar seed yang dijalankan
+ * berulang tetap menghasilkan kode berurutan (mis. CS26010201, CS26010202).
+ */
+const seedOrderSequence = new Map();
 
-function randomToken(length) {
-  const bytes = randomBytes(length);
-  let output = "";
-  for (let index = 0; index < length; index += 1) {
-    output += ORDER_NUMBER_ALPHABET[bytes[index] % ORDER_NUMBER_ALPHABET.length];
-  }
-  return output;
-}
-
-function jakartaDateStamp(date = new Date()) {
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Asia/Jakarta",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).formatToParts(date);
-  const map = Object.fromEntries(parts.map((part) => [part.type, part.value]));
-  return `${map.year}${map.month}${map.day}`;
-}
-
-function generateOrderNumber(date = new Date()) {
-  return `LDR-${jakartaDateStamp(date)}-${randomToken(5)}`;
+/** Memakai aturan kode pesanan yang sama dengan aplikasi (CS/ST/EX/LD). */
+function nextSeedOrderNumber(serviceNames, date) {
+  const prefix = resolveOrderCodePrefix(serviceNames);
+  const key = `${prefix}${jakartaDateStampShort(date)}`;
+  const sequence = (seedOrderSequence.get(key) ?? 0) + 1;
+  seedOrderSequence.set(key, sequence);
+  return buildOrderNumber({ prefix, date, sequence });
 }
 
 function daysAgo(days) {
@@ -483,7 +473,10 @@ async function seedOrders({ admin, customers, services }) {
 
     const order = await prisma.order.create({
       data: {
-        orderNumber: generateOrderNumber(seed.createdAt),
+        orderNumber: nextSeedOrderNumber(
+          items.map((item) => item.serviceNameSnapshot),
+          seed.createdAt,
+        ),
         customerId: seed.customer.id,
         status: seed.status,
         weight: orderWeight,

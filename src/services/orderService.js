@@ -10,11 +10,16 @@
  * Semua fungsi murni (pure) dipisahkan agar mudah diuji.
  */
 
-import { randomBytes } from "node:crypto";
-
 import prisma from "@/lib/prisma";
 import { Decimal } from "@/lib/decimal";
-import { JAKARTA_TIME_ZONE } from "@/lib/format";
+import {
+  buildOrderNumber,
+  buildOrderNumberPrefix,
+  formatOrderSequence,
+  jakartaDateStamp,
+  MAX_DAILY_ORDER_SEQUENCE,
+  resolveOrderCodePrefix,
+} from "@/lib/orderCode";
 import {
   DEFAULT_PAGE_SIZE,
   MAX_PAGE_SIZE,
@@ -28,33 +33,34 @@ import {
 
 import { notifyOrderEvent } from "./notificationService";
 
-const ORDER_NUMBER_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+// `jakartaDateStamp` tetap diekspor dari modul ini agar pemanggil lama
+// (mis. filter laporan) tidak perlu diubah.
+export { jakartaDateStamp };
 
-/** Token acak untuk nomor pesanan (tanpa karakter ambigu I/O/0/1). */
-function randomToken(length) {
-  const bytes = randomBytes(length);
-  let output = "";
-  for (let index = 0; index < length; index += 1) {
-    output += ORDER_NUMBER_ALPHABET[bytes[index] % ORDER_NUMBER_ALPHABET.length];
+const DAILY_SEQUENCE_FULL = "DAILY_ORDER_SEQUENCE_FULL";
+
+/**
+ * Menghitung nomor urut pesanan berikutnya untuk prefix & tanggal tertentu.
+ * Harus dipanggil di dalam transaksi pembuatan pesanan; bila dua permintaan
+ * berjalan bersamaan, percobaan yang kalah akan ditangani oleh unique
+ * constraint dan diulang dengan nomor baru.
+ */
+async function nextDailyOrderSequence(tx, prefix, date = new Date()) {
+  const key = buildOrderNumberPrefix(prefix, date);
+  const rows = await tx.order.findMany({
+    where: { orderNumber: { startsWith: key } },
+    select: { orderNumber: true },
+  });
+
+  let max = 0;
+  for (const row of rows) {
+    const suffix = row.orderNumber.slice(key.length);
+    if (!/^\d+$/.test(suffix)) continue;
+    const sequence = Number.parseInt(suffix, 10);
+    if (Number.isInteger(sequence) && sequence > max) max = sequence;
   }
-  return output;
-}
 
-/** Tanggal (zona Asia/Jakarta) dalam format YYYYMMDD. */
-export function jakartaDateStamp(date = new Date()) {
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: JAKARTA_TIME_ZONE,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).formatToParts(date);
-  const map = Object.fromEntries(parts.map((part) => [part.type, part.value]));
-  return `${map.year}${map.month}${map.day}`;
-}
-
-/** Nomor pesanan unik, contoh: LDR-20261012-7KQ2M */
-export function generateOrderNumber(date = new Date()) {
-  return `LDR-${jakartaDateStamp(date)}-${randomToken(5)}`;
+  return max + 1;
 }
 
 export function isUniqueConstraintError(error) {
@@ -311,6 +317,11 @@ export async function createOrder({ customerId, items, customerNotes = null }) {
 
   const totals = calculateOrderTotals(draftItems, 0);
 
+  // Prefix nomor pesanan mengikuti layanan yang dipesan (CS/ST/EX/LD).
+  const orderCodePrefix = resolveOrderCodePrefix(
+    draftItems.map((item) => item.serviceNameSnapshot),
+  );
+
   const orderData = {
     customerId,
     status: ORDER_STATUS.PENDING,
@@ -334,15 +345,32 @@ export async function createOrder({ customerId, items, customerNotes = null }) {
   let created = null;
   let lastError = null;
 
-  // Nomor pesanan wajib unik. Bila terjadi tabrakan (sangat jarang),
-  // transaksi diulang dengan nomor baru.
+  // Nomor pesanan wajib unik. Bila terjadi tabrakan (mis. dua pesanan dibuat
+  // hampir bersamaan), transaksi diulang dan nomor urut dihitung ulang.
   for (let attempt = 0; attempt < 5 && !created; attempt += 1) {
     try {
       created = await prisma.$transaction(async (tx) => {
+        const now = new Date();
+        const sequence = await nextDailyOrderSequence(
+          tx,
+          orderCodePrefix,
+          now,
+        );
+
+        if (sequence > MAX_DAILY_ORDER_SEQUENCE) {
+          const capacityError = new Error(DAILY_SEQUENCE_FULL);
+          capacityError.code = DAILY_SEQUENCE_FULL;
+          throw capacityError;
+        }
+
         const order = await tx.order.create({
           data: {
             ...orderData,
-            orderNumber: generateOrderNumber(),
+            orderNumber: buildOrderNumber({
+              prefix: orderCodePrefix,
+              date: now,
+              sequence,
+            }),
             items: { create: itemsCreate },
           },
         });
@@ -369,6 +397,14 @@ export async function createOrder({ customerId, items, customerNotes = null }) {
         return order;
       });
     } catch (error) {
+      if (error?.code === DAILY_SEQUENCE_FULL) {
+        return {
+          ok: false,
+          message: `Kapasitas nomor pesanan harian untuk layanan ini sudah penuh (maksimal ${formatOrderSequence(
+            MAX_DAILY_ORDER_SEQUENCE,
+          )} pesanan per hari). Silakan coba lagi besok.`,
+        };
+      }
       if (isUniqueConstraintError(error) && attempt < 4) {
         lastError = error;
         continue;

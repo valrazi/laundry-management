@@ -5,9 +5,14 @@ import {
   calculateOrderTotals,
   canTransition,
   computeItemSubtotal,
-  generateOrderNumber,
   isActiveStatus,
 } from "@/services/orderService";
+import {
+  buildOrderNumber,
+  extractOrderSequence,
+  formatOrderSequence,
+  resolveOrderCodePrefix,
+} from "@/lib/orderCode";
 
 describe("computeItemSubtotal", () => {
   it("menghitung subtotal layanan per kilogram", () => {
@@ -136,17 +141,41 @@ describe("canTransition", () => {
   });
 });
 
-describe("generateOrderNumber", () => {
-  it("mengikuti format yang ditentukan", () => {
-    expect(generateOrderNumber()).toMatch(/^LDR-\d{8}-[A-Z2-9]{5}$/);
+describe("kode pesanan", () => {
+  it("memilih prefix sesuai layanan", () => {
+    expect(resolveOrderCodePrefix(["Cuci Setrika"])).toBe("CS");
+    expect(resolveOrderCodePrefix(["Setrika"])).toBe("ST");
+    expect(resolveOrderCodePrefix(["Express"])).toBe("EX");
+    expect(resolveOrderCodePrefix(["Sprei"])).toBe("LD");
   });
 
-  it("menghasilkan nilai yang unik pada banyak pembuatan", () => {
-    const numbers = new Set();
-    for (let index = 0; index < 500; index += 1) {
-      numbers.add(generateOrderNumber());
-    }
-    expect(numbers.size).toBe(500);
+  it("mengutamakan layanan Express pada pesanan campuran", () => {
+    expect(resolveOrderCodePrefix(["Sprei", "Express"])).toBe("EX");
+    expect(resolveOrderCodePrefix(["Setrika", "Cuci Setrika"])).toBe("CS");
+  });
+
+  it("memakai format PREFIX + YYMMDD + 2 digit nomor urut", () => {
+    const date = new Date("2026-01-02T10:00:00+07:00");
+    expect(buildOrderNumber({ prefix: "CS", date, sequence: 1 })).toBe(
+      "CS26010201",
+    );
+    expect(buildOrderNumber({ prefix: "ST", date, sequence: 12 })).toBe(
+      "ST26010212",
+    );
+    expect(buildOrderNumber({ prefix: "EX", date, sequence: 99 })).toBe(
+      "EX26010299",
+    );
+  });
+
+  it("menolak nomor urut di luar rentang 1-99", () => {
+    expect(() => formatOrderSequence(0)).toThrow();
+    expect(() => formatOrderSequence(100)).toThrow();
+  });
+
+  it("mengambil kembali nomor urut dari kode pesanan", () => {
+    const date = new Date("2026-01-02T10:00:00+07:00");
+    expect(extractOrderSequence("CS26010207", "CS", date)).toBe(7);
+    expect(extractOrderSequence("ST26010207", "CS", date)).toBeNull();
   });
 });
 

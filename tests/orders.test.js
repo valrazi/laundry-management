@@ -76,7 +76,7 @@ describe("createOrder", () => {
     const order = await createItemOrder();
 
     expect(order.status).toBe(ORDER_STATUS.PENDING);
-    expect(order.orderNumber).toMatch(/^LDR-\d{8}-[A-Z2-9]{5}$/);
+    expect(order.orderNumber).toMatch(/^(CS|ST|EX|LD)\d{6}\d{2}$/);
     expect(order.subtotal.toString()).toBe("50000");
     expect(order.totalPrice.toString()).toBe("50000");
 
@@ -159,6 +159,59 @@ describe("createOrder", () => {
     const first = await createItemOrder();
     const second = await createItemOrder();
     expect(first.orderNumber).not.toBe(second.orderNumber);
+  });
+
+  it("memakai kode EX dan nomor urut harian untuk layanan Express", async () => {
+    const express = await createService({
+      name: "Express Uji",
+      price: "9000.00",
+      priceUnit: PRICE_UNITS.KG,
+    });
+
+    const first = await createOrder({
+      customerId: customerA.id,
+      items: [{ serviceId: express.id, quantity: null }],
+    });
+    const second = await createOrder({
+      customerId: customerA.id,
+      items: [{ serviceId: express.id, quantity: null }],
+    });
+
+    expect(first.ok).toBe(true);
+    expect(second.ok).toBe(true);
+    expect(first.order.orderNumber).toMatch(/^EX\d{6}\d{2}$/);
+    expect(second.order.orderNumber).toMatch(/^EX\d{6}\d{2}$/);
+
+    const firstSequence = Number.parseInt(first.order.orderNumber.slice(-2), 10);
+    const secondSequence = Number.parseInt(
+      second.order.orderNumber.slice(-2),
+      10,
+    );
+    expect(secondSequence).toBe(firstSequence + 1);
+  });
+
+  it("memakai kode CS untuk pesanan gabungan Cuci Setrika dan Setrika", async () => {
+    const cuciSetrika = await createService({
+      name: "Cuci Setrika Uji",
+      price: "6000.00",
+      priceUnit: PRICE_UNITS.KG,
+    });
+    const setrika = await createService({
+      name: "Setrika Uji",
+      price: "4500.00",
+      priceUnit: PRICE_UNITS.KG,
+    });
+
+    const result = await createOrder({
+      customerId: customerA.id,
+      items: [
+        { serviceId: setrika.id, quantity: null },
+        { serviceId: cuciSetrika.id, quantity: null },
+      ],
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.order.orderNumber).toMatch(/^CS\d{6}\d{2}$/);
   });
 });
 

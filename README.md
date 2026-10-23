@@ -20,7 +20,7 @@ otomatis ketika pesanan dibuat dan ketika status pesanan berubah.
 | Dashboard Admin | Statistik pesanan, pesanan aktif, pesanan selesai, menunggu verifikasi, pendapatan terverifikasi |
 | Pelanggan (Admin) | Daftar, pencarian, filter status, detail, riwayat pesanan, aktif/nonaktif akun |
 | Layanan | Tambah, ubah, aktif/nonaktif, satuan harga KG atau ITEM |
-| Pesanan | Buat pesanan, nomor unik, snapshot harga, berat aktual, biaya tambahan, riwayat status |
+| Pesanan | Buat pesanan, nomor unik berformat `CS`/`ST`/`EX` + tanggal + urutan harian, snapshot harga, berat aktual, biaya tambahan, riwayat status |
 | Status Pesanan | Transisi tervalidasi + mode koreksi admin yang tercatat |
 | Pembayaran | Unggah bukti transfer, verifikasi, penolakan dengan alasan, riwayat keputusan |
 | Notifikasi WhatsApp | 8 event, template yang dapat diubah, log, dry-run, kirim ulang manual |
@@ -631,6 +631,12 @@ mengunggah bukti transfer **tidak** berarti pembayaran lunas.
    tetap dibaca dari database, bukan dari halaman yang dipakai untuk login.
 9. **Area pelanggan dirancang mobile-first** (navigasi bawah, daftar berbentuk
    kartu, input 16 px) karena mayoritas pelanggan mengakses lewat ponsel.
+10. **Format nomor pesanan** mengikuti jenis layanan: Cuci Setrika `CS` + `YYMMDD`
+    + 2 digit nomor urut, Setrika `ST`, dan Express `EX` (contoh `CS26010201`).
+    Pesanan campuran memakai prioritas Express > Cuci Setrika > Setrika, sedangkan
+    layanan lain memakai `LD`. Nomor urut dihitung terpisah per prefix per hari
+    (zona Asia/Jakarta) dan dibatasi 01-99. Perubahan ini hanya berlaku untuk
+    pesanan baru; nomor pesanan lama tidak diubah.
 
 ---
 

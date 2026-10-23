@@ -38,7 +38,7 @@ export default async function AdminNotificationTemplatesPage() {
 
   const previewVariables = {
     customerName: "Budi Santoso",
-    orderNumber: "LDR-20261012-7KQ2M",
+    orderNumber: "CS26010201",
     orderStatus: "Sedang Diproses",
     serviceName: "Cuci Setrika",
     weight: "4,5 kg",
